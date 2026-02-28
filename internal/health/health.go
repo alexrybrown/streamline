@@ -47,6 +47,6 @@ func (c *Checker) Handler() http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(results)
+		_ = json.NewEncoder(w).Encode(results)
 	})
 }

@@ -1,6 +1,10 @@
 # Binaries
 /bin/
+/encoder-worker
 *.exe
+
+# Test artifacts
+coverage.out
 
 # IDE
 .idea/
@@ -30,3 +34,6 @@ Thumbs.db
 # Claude Code (local/personal files)
 .claude/settings.local.json
 .claude/*.local.md
+
+# Git worktrees
+.worktrees/

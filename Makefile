@@ -1,4 +1,4 @@
-.PHONY: generate build test lint clean docker-up docker-down
+.PHONY: generate build test lint mocks clean docker-up docker-down
 
 generate:
 	buf generate
@@ -7,11 +7,14 @@ build: generate
 	go build ./cmd/...
 
 test:
-	go test ./... -v -race
+	go test ./... -v -race -timeout=60s
 
 lint:
 	buf lint
 	golangci-lint run ./...
+
+mocks:
+	mockery
 
 clean:
 	rm -rf gen/ bin/

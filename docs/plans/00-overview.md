@@ -1,12 +1,14 @@
 # Streamline — Plan Overview
 
 > **For Claude:** Read this file FIRST. Then read ONLY the epic file you need next. Do NOT load all epic files at once — they are chunked to preserve context window.
+>
+> **Coding conventions are in `CLAUDE.md` at repo root.** Follow them exactly.
 
 **Goal:** Build a live streaming orchestration platform that ingests, transcodes, packages, and serves video — demonstrating domain expertise in live video infrastructure with Go, ConnectRPC, Kafka, and Kubernetes.
 
 **Architecture:** Control plane (Stream Manager, Pipeline Controller, API Service) orchestrates a data plane (Source, Encoder Workers, Packager). Kafka carries pipeline telemetry. Encoder workers push segments to Packager via HTTP. The system uses layered failover: local FFmpeg supervisor, heartbeat timeout, and K8s restart.
 
-**Tech Stack:** Go, ConnectRPC + Protobuf (Buf CLI), Kafka (segmentio/kafka-go), MongoDB (official driver), FFmpeg + H.264, HLS (RFC 8216), Vite + React + hls.js, OpenTelemetry, Prometheus, Grafana, Docker Compose, Helm, OpenTofu
+**Tech Stack:** Go, ConnectRPC + Protobuf (Buf CLI), Kafka (twmb/franz-go), MongoDB (official driver), FFmpeg + H.264, HLS (RFC 8216), Vite + React + hls.js, OpenTelemetry, Prometheus, Grafana, Docker Compose, Helm, OpenTofu
 
 ---
 
@@ -15,7 +17,7 @@
 | Epic | File | Status | Milestone |
 |------|------|--------|-----------|
 | 1 | `01-foundation.md` | DONE | `buf generate` works, `docker compose up` starts infra |
-| 2 | `02-encoding-pipeline.md` | TODO | Segments on disk, events in Kafka |
+| 2 | `02-encoding-pipeline.md` | IN PROGRESS | Segments on disk, events in Kafka |
 | 3 | `03-packaging-playback.md` | TODO | BBB plays in hls.js page |
 | 4 | `04-stream-manager.md` | TODO | ConnectRPC call starts stream end-to-end |
 | 5 | `05-pipeline-controller.md` | TODO | Kill encoder → controller recovers |
@@ -27,7 +29,7 @@
 
 ```
 Epic 1 (Foundation)
-  └─▶ Epic 2 (Encoding Pipeline)
+  └─▶ Epic 2 (Encoding Pipeline)  ← Stories 2.1 + 2.2 DONE
        └─▶ Epic 3 (Packaging + Playback)
             └─▶ Epic 4 (Stream Manager + Live Source)
                  └─▶ Epic 5 (Pipeline Controller)
@@ -40,8 +42,14 @@ Epic 1 (Foundation)
 
 ## Decisions & Conventions
 
+### Coding Standards: CLAUDE.md
+All Go coding conventions (config structs, logger scoping, code hygiene) are documented in `CLAUDE.md` at the repo root. That file is the single source of truth — do not duplicate here.
+
+### Kafka: franz-go (not segmentio/kafka-go)
+`twmb/franz-go` with `kfake` for in-memory test clusters. Constructors accept config structs (`ProducerConfig`, `ConsumerConfig`).
+
 ### Logging: Zap (not slog)
-One root `*zap.Logger` in `main()`, injected into constructors. Each struct customizes with `.Named().With()`. `zap.NewNop()` for tests. Already implemented in `internal/logging/logging.go`.
+One root `*zap.Logger` in `main()`, injected via config structs. Constructors scope with `.Named("component").With(...)`. Methods add `zap.String("method", "name")` as a field. `zap.NewNop()` for tests. Nil logger defaults to `zap.NewNop()` in constructors. Already implemented in `internal/logging/logging.go`.
 
 ### Secrets: Proton Pass CLI
 Use `pass-cli run --env-file .env.template -- <cmd>` when real secrets are needed. Go code reads `os.Getenv()` — zero code changes. Only needed when real credentials enter (e.g., AWS in Epic 7).
@@ -66,5 +74,5 @@ MongoDB is mapped to **host port 27018** (not default 27017) to avoid conflicts 
 2. **Go 1.22+** recommended
 3. **Docker must be running** for Docker Compose and testcontainers
 4. **TDD everywhere** — write failing test → implement → verify pass → commit
-5. **Code in plan is a starting point, not gospel** — adapt as needed
+5. **Code in plan is a starting point, not gospel** — adapt per CLAUDE.md conventions
 6. **Commit after every story** — intermediate commits within stories are fine too

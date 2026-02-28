@@ -1,0 +1,7 @@
+packages:
+  github.com/alexrybrown/streamline/internal/kafka:
+    config:
+      all: true
+  github.com/alexrybrown/streamline/internal/encoder:
+    config:
+      all: true

@@ -17,7 +17,7 @@
 | Epic | File | Status | Milestone |
 |------|------|--------|-----------|
 | 1 | `01-foundation.md` | DONE | `buf generate` works, `docker compose up` starts infra |
-| 2 | `02-encoding-pipeline.md` | IN PROGRESS | Segments on disk, events in Kafka |
+| 2 | `02-encoding-pipeline.md` | DONE | Segments on disk, events in Kafka |
 | 3 | `03-packaging-playback.md` | TODO | BBB plays in hls.js page |
 | 4 | `04-stream-manager.md` | TODO | ConnectRPC call starts stream end-to-end |
 | 5 | `05-pipeline-controller.md` | TODO | Kill encoder → controller recovers |
@@ -28,9 +28,9 @@
 **Epics are sequential** — each builds on the previous.
 
 ```
-Epic 1 (Foundation)
-  └─▶ Epic 2 (Encoding Pipeline)  ← Stories 2.1 + 2.2 DONE
-       └─▶ Epic 3 (Packaging + Playback)
+Epic 1 (Foundation)  ✓
+  └─▶ Epic 2 (Encoding Pipeline)  ✓
+       └─▶ Epic 3 (Packaging + Playback)  ← NEXT
             └─▶ Epic 4 (Stream Manager + Live Source)
                  └─▶ Epic 5 (Pipeline Controller)
                       └─▶ Epic 6 (API + Dashboard)

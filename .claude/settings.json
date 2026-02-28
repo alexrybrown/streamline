@@ -1,0 +1,106 @@
+{
+  "env": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_BUG_COMMAND": "1", 
+    "DISABLE_TELEMETRY": "1"
+  },
+  
+  "includeCoAuthoredBy": false,
+  
+  "permissions": {
+    "deny": [
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(rm -rf:*)",
+      "Bash(rm -r:*)",
+      "Bash(rm /*:*)",
+      "Bash(dd:*)",
+      "Bash(sudo:*)",
+      "Bash(su:*)",
+      "Bash(doas:*)",
+      "Bash(chmod:*)",
+      "Bash(chown:*)",
+      "Bash(nc:*)",
+      "Bash(netcat:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(rsync:*)",
+      "Bash(kill:*)",
+      "Bash(killall:*)",
+      "Bash(shutdown:*)",
+      "Bash(reboot:*)",
+      "Bash(systemctl:*)",
+      "Bash(apt:*)",
+      "Bash(apt-get:*)",
+      "Bash(yum:*)",
+      "Bash(dnf:*)",
+      "Bash(brew:*)",
+      "Bash(pip install:*)",
+      "Bash(git remote add:*)",
+      "Read(/etc/passwd)",
+      "Read(/etc/shadow)",
+      "Read(~/.ssh/*)",
+      "Read(~/.aws/*)",
+      "Read(~/.config/*)",
+      "Read(*/.env)",
+      "Read(*/.env.*)",
+      "Read(*/.npmrc)",
+      "Write(/etc/*)",
+      "Write(~/.ssh/*)",
+      "Write(~/.aws/*)"
+    ],
+    
+    "allow": [
+      "Read",
+      "LS",
+      "Glob",
+      "Grep",
+      "TodoWrite",
+      "Task",
+      "ExitPlanMode",
+      
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git stash:*)",
+      
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(go mod:*)",
+      "Bash(go generate:*)",
+      "Bash(./buf_pipeline.sh*)",
+      
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm install --package-lock-only:*)",
+      "Bash(npx:*)",
+      "Bash(node metrics/*:*)",
+      
+      "Bash(kubectl logs:*)",
+      "Bash(kubectl describe:*)",
+      
+      "Bash(docker ps:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker network:*)",
+      
+      "Bash(ls:*)",
+      "Bash(pwd:*)",
+      "Bash(head:*)",
+      "Bash(rg:*)",
+      "Bash(fdfind:*)",
+      "Bash(which:*)",
+      "Bash(cd:*)",
+      
+      "mcp__brave-search__brave_web_search",
+      "mcp__brave-search__brave_local_search"
+    ],
+    
+    "additionalDirectories": []
+  }
+}

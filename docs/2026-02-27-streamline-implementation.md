@@ -2940,12 +2940,107 @@ All epics are sequential — each builds on the previous.
 
 ---
 
+## Decisions & Deviations from Original Plan
+
+### Decision 1: Zap instead of slog for logging
+
+**Context:** The original plan used Go's built-in `log/slog`. After evaluation, we chose `go.uber.org/zap` v1.27.1 instead.
+
+**Why:** Zap is ~40-67% faster than slog for structured logging — critical for a video streaming platform with high-throughput segment events. The per-struct logger pattern (`root.Named("Component").With(fields...)`) provides better observability than slog's approach.
+
+**Pattern:** One root `*zap.Logger` in `main()`, injected into constructors. Each struct customizes with `.Named().With()`. Per-request child loggers via `.With()` inside methods. `zap.NewNop()` for tests.
+
+### Decision 2: Proton Pass CLI for secrets management
+
+**Context:** Instead of `.env` files with plaintext secrets, use Proton Pass CLI (`pass-cli`) for runtime secret injection. This is especially important when AI agents have access to the codebase.
+
+**Why:** The `pass-cli run --env-file .env.template -- go run ./cmd/server` pattern means secrets are never written to disk, never appear in `.env` files, and AI agents only see `pass://` references. Go code still reads `os.Getenv()` — zero application code changes needed.
+
+**Implementation:** When real secrets are introduced (e.g., Story 7.4 with AWS credentials, or any external API keys):
+
+1. Create `.env.template` (committed to git, contains only references):
+   ```bash
+   # .env.template — safe to commit, no real secrets
+   KAFKA_BROKERS=localhost:9092
+   MONGO_URI=mongodb://localhost:27017
+   AWS_ACCESS_KEY_ID=pass://Streamline/aws/access_key_id
+   AWS_SECRET_ACCESS_KEY=pass://Streamline/aws/secret_access_key
+   ```
+
+2. Add Makefile targets that use `pass-cli run`:
+   ```makefile
+   run-manager:
+       pass-cli run --env-file .env.template -- go run ./cmd/stream-manager
+   ```
+
+3. Install: `curl -fsSL https://proton.me/download/pass-cli/install.sh | bash`
+
+**Note:** For local-only infrastructure (Kafka, MongoDB on localhost), plain env var defaults are fine. `pass-cli` becomes essential when real credentials enter the picture.
+
+### Decision 3: golang-migrate for MongoDB schema management
+
+**Context:** MongoDB is schemaless at the storage layer, but production applications need managed collection creation, JSON Schema validators, indexes, and seed data. The user initially considered Liquibase.
+
+**Why not Liquibase:** Liquibase requires a JVM runtime — an unjustifiable operational burden for a Go microservices project. Its most useful MongoDB features (mongosh scripts, rollback) require a paid Pro license.
+
+**Why golang-migrate:** `github.com/golang-migrate/migrate` is the de facto Go migration tool with official MongoDB support. It provides advisory locking (safe for multi-replica deploys), ships as a standalone CLI binary (works in K8s init containers and CI), and uses JSON migration files that live in version control.
+
+**Implementation:**
+- Create `migrations/` directory at repo root
+- Migration files are JSON arrays of `db.runCommand` documents (collection creation, `$jsonSchema` validators, `createIndexes`, seed data)
+- Add `cmd/migrate/main.go` as a thin wrapper that loads config (for DB URI from env/secrets) before calling golang-migrate programmatically
+- Add `make migrate-up` and `make migrate-down` Makefile targets
+- In Kubernetes, run as an init container before service pods start
+- For complex data transformations that can't be expressed as aggregation pipeline JSON, supplement with direct Go driver code in a separate `cmd/migrate-transform/main.go`
+
+**File naming convention:** `NNNNNN_description.up.json` / `NNNNNN_description.down.json`
+
+**Example migration (000001_create_streams_collection.up.json):**
+```json
+[
+  { "create": "streams" },
+  {
+    "collMod": "streams",
+    "validator": {
+      "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["source_uri", "state", "created_at"],
+        "properties": {
+          "source_uri": { "bsonType": "string" },
+          "state": { "bsonType": "string", "enum": ["provisioning", "active", "degraded", "failed", "stopping", "stopped"] },
+          "created_at": { "bsonType": "date" }
+        }
+      }
+    },
+    "validationLevel": "moderate",
+    "validationAction": "error"
+  },
+  {
+    "createIndexes": "streams",
+    "indexes": [
+      { "key": { "state": 1 }, "name": "state_idx" }
+    ]
+  }
+]
+```
+
+### Decision 4: Connect-ES v2 for frontend TypeScript generation
+
+**Context:** The original plan used Connect-ES v1 with separate `protoc-gen-connect-es` and `protoc-gen-es` plugins.
+
+**Why:** Connect-ES 2.0 + Protobuf-ES 2.0 use a single `protoc-gen-es` plugin, generate plain TypeScript types instead of classes (better framework compatibility), and use `create(Schema, {...})` instead of `new Message()`.
+
+**Implementation:** `buf.gen.yaml` uses `local: protoc-gen-es` with `target=ts`. Frontend deps: `@connectrpc/connect`, `@connectrpc/connect-web`, `@bufbuild/protobuf`, and dev dep `@bufbuild/protoc-gen-es`.
+
+---
+
 ## Notes for Implementer
 
-1. **Replace `yourusername`** with Alex's actual GitHub username throughout.
+1. **Replace `yourusername`** with Alex's actual GitHub username (`alexrybrown`) throughout.
 2. **FFmpeg must be installed** on the dev machine. Install via `sudo apt install ffmpeg` or `brew install ffmpeg`.
-3. **Go 1.22+** recommended for `slog` and latest module features.
+3. **Go 1.22+** recommended for latest module features. Logging uses Zap (not slog).
 4. **Docker Desktop or equivalent** must be running for Docker Compose and testcontainers.
 5. **Commit often.** Each story should end with a commit. Each step within a story can have intermediate commits.
 6. **Tests first.** Write the failing test before the implementation wherever possible. Skip TDD only for config files and infrastructure setup.
 7. **The code in this plan is a starting point, not gospel.** The implementer should adapt based on what they discover during development. The structure and interfaces may evolve — that's expected.
+8. **Proton Pass CLI** (`pass-cli`) should be installed before introducing any real secrets. See Decision 2 above.

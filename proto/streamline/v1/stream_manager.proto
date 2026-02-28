@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package streamline.v1;
+
+option go_package = "github.com/alexrybrown/streamline/gen/go/streamline/v1;streamlinev1";
+
+import "streamline/v1/stream.proto";
+
+service StreamManagerService {
+  // Start a new live stream pipeline.
+  rpc StartStream(StartStreamRequest) returns (StartStreamResponse) {}
+
+  // Stop a running stream.
+  rpc StopStream(StopStreamRequest) returns (StopStreamResponse) {}
+
+  // Restart a stream (stop + start).
+  rpc RestartStream(RestartStreamRequest) returns (RestartStreamResponse) {}
+}
+
+message StartStreamRequest {
+  string source_uri = 1;
+  EncodingProfile encoding_profile = 2;
+}
+
+message StartStreamResponse {
+  Stream stream = 1;
+}
+
+message StopStreamRequest {
+  string stream_id = 1;
+}
+
+message StopStreamResponse {
+  Stream stream = 1;
+}
+
+message RestartStreamRequest {
+  string stream_id = 1;
+}
+
+message RestartStreamResponse {
+  Stream stream = 1;
+}

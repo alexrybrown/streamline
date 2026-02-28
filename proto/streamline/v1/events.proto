@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package streamline.v1;
+
+option go_package = "github.com/alexrybrown/streamline/gen/go/streamline/v1;streamlinev1";
+
+import "google/protobuf/timestamp.proto";
+import "streamline/v1/stream.proto";
+
+// Heartbeat emitted by encoder workers at a fixed interval.
+message Heartbeat {
+  string worker_id = 1;
+  string stream_id = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  WorkerStatus status = 4;
+}
+
+enum WorkerStatus {
+  WORKER_STATUS_UNSPECIFIED = 0;
+  WORKER_STATUS_IDLE = 1;
+  WORKER_STATUS_ENCODING = 2;
+  WORKER_STATUS_ERROR = 3;
+}
+
+// Emitted by encoder worker after pushing a segment to the Packager.
+message SegmentProduced {
+  string stream_id = 1;
+  string worker_id = 2;
+  int64 sequence_number = 3;
+  int64 duration_ms = 4;
+  int64 size_bytes = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// Emitted by Packager after accepting a segment and updating the manifest.
+message SegmentAvailable {
+  string stream_id = 1;
+  int64 sequence_number = 2;
+  string playlist_path = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// Emitted by Packager when a gap in sequence numbers is detected.
+message SegmentGap {
+  string stream_id = 1;
+  int64 expected_sequence = 2;
+  int64 received_sequence = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// Emitted when stream state changes.
+message StreamStateChanged {
+  string stream_id = 1;
+  StreamState previous_state = 2;
+  StreamState new_state = 3;
+  string reason = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}

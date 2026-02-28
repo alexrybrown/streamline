@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package streamline.v1;
+
+option go_package = "github.com/alexrybrown/streamline/gen/go/streamline/v1;streamlinev1";
+
+import "google/protobuf/timestamp.proto";
+
+// Stream represents a live streaming pipeline instance.
+message Stream {
+  string id = 1;
+  string source_uri = 2;
+  StreamState state = 3;
+  EncodingProfile encoding_profile = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+enum StreamState {
+  STREAM_STATE_UNSPECIFIED = 0;
+  STREAM_STATE_PROVISIONING = 1;
+  STREAM_STATE_ACTIVE = 2;
+  STREAM_STATE_DEGRADED = 3;
+  STREAM_STATE_FAILED = 4;
+  STREAM_STATE_STOPPING = 5;
+  STREAM_STATE_STOPPED = 6;
+}
+
+message EncodingProfile {
+  string codec = 1;
+  int32 width = 2;
+  int32 height = 3;
+  int32 bitrate_kbps = 4;
+  int32 framerate = 5;
+  int32 segment_duration_s = 6;
+}

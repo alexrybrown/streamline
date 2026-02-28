@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package streamline.v1;
+
+option go_package = "github.com/alexrybrown/streamline/gen/go/streamline/v1;streamlinev1";
+
+import "streamline/v1/stream.proto";
+
+service StreamlineAPIService {
+  // Get a stream by ID.
+  rpc GetStream(GetStreamRequest) returns (GetStreamResponse) {}
+
+  // List all streams.
+  rpc ListStreams(ListStreamsRequest) returns (ListStreamsResponse) {}
+}
+
+message GetStreamRequest {
+  string stream_id = 1;
+}
+
+message GetStreamResponse {
+  Stream stream = 1;
+}
+
+message ListStreamsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListStreamsResponse {
+  repeated Stream streams = 1;
+  string next_page_token = 2;
+}

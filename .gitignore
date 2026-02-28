@@ -1,0 +1,28 @@
+# Binaries
+/bin/
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Generated
+/gen/
+
+# Dependencies
+/vendor/
+
+# Docker volumes
+/data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Video assets (downloaded at build time)
+/assets/*.mp4
+
+# Environment
+.env
+.env.local

@@ -15,6 +15,7 @@ coverage.out
 
 # Generated
 /gen/
+web/dashboard/src/gen/
 
 # Dependencies
 /vendor/

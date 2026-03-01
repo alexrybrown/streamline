@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -17,12 +18,9 @@ import (
 	"github.com/alexrybrown/streamline/internal/packager"
 )
 
-func newTestClient(t *testing.T, outputDir string) streamlinev1connect.PackagerServiceClient {
+// newClientForReceiver starts an httptest server for the given Receiver and returns a client.
+func newClientForReceiver(t *testing.T, receiver *packager.Receiver) streamlinev1connect.PackagerServiceClient {
 	t.Helper()
-	receiver := packager.NewReceiver(packager.ReceiverConfig{
-		OutputDir: outputDir,
-		Log:       zap.NewNop(),
-	})
 	mux := http.NewServeMux()
 	path, handler := streamlinev1connect.NewPackagerServiceHandler(receiver)
 	mux.Handle(path, handler)
@@ -30,6 +28,15 @@ func newTestClient(t *testing.T, outputDir string) streamlinev1connect.PackagerS
 	server.Start()
 	t.Cleanup(server.Close)
 	return streamlinev1connect.NewPackagerServiceClient(server.Client(), server.URL)
+}
+
+func newTestClient(t *testing.T, outputDir string) streamlinev1connect.PackagerServiceClient {
+	t.Helper()
+	receiver := packager.NewReceiver(packager.ReceiverConfig{
+		OutputDir: outputDir,
+		Log:       zap.NewNop(),
+	})
+	return newClientForReceiver(t, receiver)
 }
 
 func pushSegment(t *testing.T, client streamlinev1connect.PackagerServiceClient, streamID string, sequenceNumber int64, duration float64, data []byte) *connect.Response[streamlinev1.PushSegmentResponse] {
@@ -202,6 +209,161 @@ func TestReceiver_EmptyStreamReturnsInvalidArgument(t *testing.T) {
 	}
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("expected CodeInvalidArgument, got %v", connect.CodeOf(err))
+	}
+}
+
+func TestReceiver_CallsOnSegmentWritten(t *testing.T) {
+	outputDir := t.TempDir()
+
+	var calledStreamID string
+	var calledSegment packager.SegmentInfo
+	callCount := 0
+
+	receiver := packager.NewReceiver(packager.ReceiverConfig{
+		OutputDir: outputDir,
+		Log:       zap.NewNop(),
+		OnSegmentWritten: func(streamID string, segment packager.SegmentInfo) {
+			callCount++
+			calledStreamID = streamID
+			calledSegment = segment
+		},
+	})
+	client := newClientForReceiver(t, receiver)
+
+	segmentData := []byte("callback test data")
+	pushSegment(t, client, "stream-cb", 7, 5.5, segmentData)
+
+	if callCount != 1 {
+		t.Fatalf("expected OnSegmentWritten called once, got %d", callCount)
+	}
+	if calledStreamID != "stream-cb" {
+		t.Errorf("expected streamID %q, got %q", "stream-cb", calledStreamID)
+	}
+	if calledSegment.SequenceNumber != 7 {
+		t.Errorf("expected sequence 7, got %d", calledSegment.SequenceNumber)
+	}
+	if calledSegment.DurationSeconds != 5.5 {
+		t.Errorf("expected duration 5.5, got %f", calledSegment.DurationSeconds)
+	}
+	if calledSegment.Filename != "segment_00007.ts" {
+		t.Errorf("expected filename %q, got %q", "segment_00007.ts", calledSegment.Filename)
+	}
+}
+
+func TestReceiver_OnSegmentWrittenNotCalledForDuplicate(t *testing.T) {
+	outputDir := t.TempDir()
+
+	callCount := 0
+	receiver := packager.NewReceiver(packager.ReceiverConfig{
+		OutputDir: outputDir,
+		Log:       zap.NewNop(),
+		OnSegmentWritten: func(streamID string, segment packager.SegmentInfo) {
+			callCount++
+		},
+	})
+	client := newClientForReceiver(t, receiver)
+
+	segmentData := []byte("dedup callback test")
+
+	// Push same segment twice
+	pushSegment(t, client, "stream-dedup", 1, 6.0, segmentData)
+	pushSegment(t, client, "stream-dedup", 1, 6.0, segmentData)
+
+	if callCount != 1 {
+		t.Errorf("expected OnSegmentWritten called once (not for duplicate), got %d", callCount)
+	}
+}
+
+func TestReceiver_CreateStreamDirectoryFails(t *testing.T) {
+	outputDir := t.TempDir()
+
+	// Place a regular file where the stream directory would be created.
+	// MkdirAll will fail because it can't create a directory over an existing file.
+	blockingFilePath := filepath.Join(outputDir, "stream-blocked")
+	if err := os.WriteFile(blockingFilePath, []byte("blocker"), 0o644); err != nil {
+		t.Fatalf("create blocking file: %v", err)
+	}
+
+	client := newTestClient(t, outputDir)
+
+	stream := client.PushSegment(context.Background())
+	if err := stream.Send(&streamlinev1.PushSegmentRequest{
+		Payload: &streamlinev1.PushSegmentRequest_Metadata{
+			Metadata: &streamlinev1.SegmentMetadata{
+				StreamId:        "stream-blocked",
+				SequenceNumber:  1,
+				DurationSeconds: 6.0,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("send metadata: %v", err)
+	}
+	if err := stream.Send(&streamlinev1.PushSegmentRequest{
+		Payload: &streamlinev1.PushSegmentRequest_Chunk{
+			Chunk: []byte("segment data"),
+		},
+	}); err != nil {
+		t.Fatalf("send chunk: %v", err)
+	}
+
+	_, err := stream.CloseAndReceive()
+	if err == nil {
+		t.Fatal("expected error when stream directory creation fails, got nil")
+	}
+	if connect.CodeOf(err) != connect.CodeInternal {
+		t.Errorf("expected CodeInternal, got %v", connect.CodeOf(err))
+	}
+	if !strings.Contains(err.Error(), "create stream directory") {
+		t.Errorf("expected error about creating stream directory, got: %v", err)
+	}
+}
+
+func TestReceiver_ReadOnlyOutputDirFailsTempFileCreation(t *testing.T) {
+	outputDir := t.TempDir()
+
+	// Pre-create the stream directory, then make it read-only so temp file creation fails.
+	streamDir := filepath.Join(outputDir, "stream-readonly")
+	if err := os.MkdirAll(streamDir, 0o755); err != nil {
+		t.Fatalf("create stream dir: %v", err)
+	}
+	if err := os.Chmod(streamDir, 0o444); err != nil {
+		t.Fatalf("chmod stream dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(streamDir, 0o755)
+	})
+
+	client := newTestClient(t, outputDir)
+
+	stream := client.PushSegment(context.Background())
+	if err := stream.Send(&streamlinev1.PushSegmentRequest{
+		Payload: &streamlinev1.PushSegmentRequest_Metadata{
+			Metadata: &streamlinev1.SegmentMetadata{
+				StreamId:        "stream-readonly",
+				SequenceNumber:  1,
+				DurationSeconds: 6.0,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("send metadata: %v", err)
+	}
+	if err := stream.Send(&streamlinev1.PushSegmentRequest{
+		Payload: &streamlinev1.PushSegmentRequest_Chunk{
+			Chunk: []byte("segment data"),
+		},
+	}); err != nil {
+		t.Fatalf("send chunk: %v", err)
+	}
+
+	_, err := stream.CloseAndReceive()
+	if err == nil {
+		t.Fatal("expected error when temp file creation fails, got nil")
+	}
+	if connect.CodeOf(err) != connect.CodeInternal {
+		t.Errorf("expected CodeInternal, got %v", connect.CodeOf(err))
+	}
+	if !strings.Contains(err.Error(), "create temp file") {
+		t.Errorf("expected error about creating temp file, got: %v", err)
 	}
 }
 

@@ -25,17 +25,24 @@ const (
 	tempFileSuffix = ".tmp"
 )
 
+// SegmentWrittenFunc is called after a segment is successfully written to disk.
+// It receives the stream ID and segment metadata. This enables the service
+// layer to update manifests and publish events without tight coupling.
+type SegmentWrittenFunc func(streamID string, segment SegmentInfo)
+
 // ReceiverConfig holds configuration for the segment Receiver.
 type ReceiverConfig struct {
-	OutputDir string
-	Log       *zap.Logger
+	OutputDir        string
+	Log              *zap.Logger
+	OnSegmentWritten SegmentWrittenFunc
 }
 
 // Receiver implements the PackagerServiceHandler interface. It receives
 // streamed segment data from encoder workers and writes segments to disk.
 type Receiver struct {
-	outputDir string
-	log       *zap.Logger
+	outputDir        string
+	log              *zap.Logger
+	onSegmentWritten SegmentWrittenFunc
 
 	// dedup tracks segments that have already been written to disk.
 	// Key format: "streamID/sequenceNumber".
@@ -53,9 +60,10 @@ func NewReceiver(cfg ReceiverConfig) *Receiver {
 		cfg.Log = zap.NewNop()
 	}
 	return &Receiver{
-		outputDir: cfg.OutputDir,
-		log:       cfg.Log.Named("receiver"),
-		dedup:     make(map[string]struct{}),
+		outputDir:        cfg.OutputDir,
+		log:              cfg.Log.Named("receiver"),
+		onSegmentWritten: cfg.OnSegmentWritten,
+		dedup:            make(map[string]struct{}),
 	}
 }
 
@@ -155,6 +163,14 @@ func (receiver *Receiver) PushSegment(ctx context.Context, stream *connect.Clien
 	// Atomic rename from temp to final path.
 	if err := os.Rename(tempPath, finalPath); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("rename temp file to final: %w", err))
+	}
+
+	if receiver.onSegmentWritten != nil {
+		receiver.onSegmentWritten(streamID, SegmentInfo{
+			Filename:        segmentFilename,
+			SequenceNumber:  sequenceNumber,
+			DurationSeconds: metadata.GetDurationSeconds(),
+		})
 	}
 
 	log.Info("segment written",

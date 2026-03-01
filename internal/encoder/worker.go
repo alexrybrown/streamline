@@ -2,14 +2,16 @@ package encoder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	streamlinev1 "github.com/alexrybrown/streamline/gen/go/streamline/v1"
 	streamkafka "github.com/alexrybrown/streamline/internal/kafka"
 )
 
@@ -231,13 +233,20 @@ func (w *Worker) emitHeartbeats(ctx context.Context) {
 }
 
 func (w *Worker) publishHeartbeat(ctx context.Context) {
-	heartbeat := map[string]interface{}{
-		"worker_id": w.cfg.WorkerID,
-		"stream_id": w.cfg.StreamID,
-		"timestamp": time.Now().UTC(),
-		"status":    "encoding",
+	heartbeat := &streamlinev1.Heartbeat{
+		WorkerId:  w.cfg.WorkerID,
+		StreamId:  w.cfg.StreamID,
+		Timestamp: timestamppb.Now(),
+		Status:    streamlinev1.WorkerStatus_WORKER_STATUS_ENCODING,
 	}
-	data, _ := json.Marshal(heartbeat)
+	data, err := proto.Marshal(heartbeat)
+	if err != nil {
+		w.log.Error("failed to marshal heartbeat",
+			zap.String("method", "publishHeartbeat"),
+			zap.Error(err),
+		)
+		return
+	}
 
 	publishCtx, publishCancel := context.WithTimeout(ctx, kafkaPublishTimeout)
 	defer publishCancel()
@@ -251,14 +260,21 @@ func (w *Worker) publishHeartbeat(ctx context.Context) {
 }
 
 func (w *Worker) publishSegment(ctx context.Context, segment Segment) {
-	event := map[string]interface{}{
-		"stream_id":       w.cfg.StreamID,
-		"worker_id":       w.cfg.WorkerID,
-		"sequence_number": segment.SequenceNumber,
-		"size_bytes":      segment.Size,
-		"timestamp":       time.Now().UTC(),
+	event := &streamlinev1.SegmentProduced{
+		StreamId:       w.cfg.StreamID,
+		WorkerId:       w.cfg.WorkerID,
+		SequenceNumber: segment.SequenceNumber,
+		SizeBytes:      segment.Size,
+		Timestamp:      timestamppb.Now(),
 	}
-	data, _ := json.Marshal(event)
+	data, err := proto.Marshal(event)
+	if err != nil {
+		w.log.Error("failed to marshal segment event",
+			zap.String("method", "publishSegment"),
+			zap.Error(err),
+		)
+		return
+	}
 	publishCtx, publishCancel := context.WithTimeout(ctx, kafkaPublishTimeout)
 	defer publishCancel()
 	if err := w.segmentPublisher.Publish(publishCtx, w.cfg.StreamID, data); err != nil {

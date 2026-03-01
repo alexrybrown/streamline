@@ -2,7 +2,6 @@ package encoder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -12,6 +11,9 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/protobuf/proto"
+
+	streamlinev1 "github.com/alexrybrown/streamline/gen/go/streamline/v1"
 )
 
 // spyPublisher records Publish calls and optionally returns a custom error.
@@ -122,25 +124,22 @@ func TestEmitHeartbeats_PublishSuccess_CorrectPayload(t *testing.T) {
 		t.Errorf("expected key %q, got %q", "s-payload", firstCall.key)
 	}
 
-	var payload map[string]interface{}
-	if err := json.Unmarshal(firstCall.value, &payload); err != nil {
+	var heartbeat streamlinev1.Heartbeat
+	if err := proto.Unmarshal(firstCall.value, &heartbeat); err != nil {
 		t.Fatalf("failed to unmarshal heartbeat payload: %v", err)
 	}
 
-	expectedFields := map[string]string{
-		"worker_id": "w-payload",
-		"stream_id": "s-payload",
-		"status":    "encoding",
+	if heartbeat.GetWorkerId() != "w-payload" {
+		t.Errorf("worker_id = %q, want %q", heartbeat.GetWorkerId(), "w-payload")
 	}
-	for field, want := range expectedFields {
-		got, ok := payload[field]
-		if !ok {
-			t.Errorf("missing field %q in payload", field)
-			continue
-		}
-		if got != want {
-			t.Errorf("payload[%q] = %v, want %v", field, got, want)
-		}
+	if heartbeat.GetStreamId() != "s-payload" {
+		t.Errorf("stream_id = %q, want %q", heartbeat.GetStreamId(), "s-payload")
+	}
+	if heartbeat.GetStatus() != streamlinev1.WorkerStatus_WORKER_STATUS_ENCODING {
+		t.Errorf("status = %v, want ENCODING", heartbeat.GetStatus())
+	}
+	if heartbeat.GetTimestamp() == nil {
+		t.Error("expected timestamp to be set")
 	}
 }
 
@@ -258,49 +257,25 @@ func TestPublishSegment_CorrectPayload(t *testing.T) {
 		t.Errorf("expected key %q, got %q", "s-pay", call.key)
 	}
 
-	var payload map[string]interface{}
-	if err := json.Unmarshal(call.value, &payload); err != nil {
+	var event streamlinev1.SegmentProduced
+	if err := proto.Unmarshal(call.value, &event); err != nil {
 		t.Fatalf("failed to unmarshal segment payload: %v", err)
 	}
 
-	stringFields := map[string]string{
-		"stream_id": "s-pay",
-		"worker_id": "w-pay",
+	if event.GetStreamId() != "s-pay" {
+		t.Errorf("stream_id = %q, want %q", event.GetStreamId(), "s-pay")
 	}
-	for field, want := range stringFields {
-		got, ok := payload[field]
-		if !ok {
-			t.Errorf("missing field %q in payload", field)
-			continue
-		}
-		if got != want {
-			t.Errorf("payload[%q] = %v, want %v", field, got, want)
-		}
+	if event.GetWorkerId() != "w-pay" {
+		t.Errorf("worker_id = %q, want %q", event.GetWorkerId(), "w-pay")
 	}
-
-	// JSON numbers decode as float64
-	numericFields := map[string]float64{
-		"sequence_number": 10,
-		"size_bytes":      16384,
+	if event.GetSequenceNumber() != 10 {
+		t.Errorf("sequence_number = %d, want 10", event.GetSequenceNumber())
 	}
-	for field, want := range numericFields {
-		got, ok := payload[field]
-		if !ok {
-			t.Errorf("missing field %q in payload", field)
-			continue
-		}
-		gotFloat, ok := got.(float64)
-		if !ok {
-			t.Errorf("payload[%q] is %T, expected float64", field, got)
-			continue
-		}
-		if gotFloat != want {
-			t.Errorf("payload[%q] = %v, want %v", field, gotFloat, want)
-		}
+	if event.GetSizeBytes() != 16384 {
+		t.Errorf("size_bytes = %d, want 16384", event.GetSizeBytes())
 	}
-
-	if _, ok := payload["timestamp"]; !ok {
-		t.Error("missing 'timestamp' field in payload")
+	if event.GetTimestamp() == nil {
+		t.Error("expected timestamp to be set")
 	}
 }
 

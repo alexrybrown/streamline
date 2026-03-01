@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package streamline.v1;
+
+option go_package = "github.com/alexrybrown/streamline/gen/go/streamline/v1;streamlinev1";
+
+import "google/protobuf/timestamp.proto";
+
+// PackagerService accepts encoded segments from encoder workers and manages
+// HLS packaging. Segment transfer uses client-streaming with 64KiB chunks
+// to avoid buffering entire segments in memory.
+service PackagerService {
+  // PushSegment streams an encoded segment from an encoder worker to the
+  // packager. The first message must contain metadata (stream ID, sequence
+  // number). Subsequent messages carry raw segment data in chunks.
+  rpc PushSegment(stream PushSegmentRequest) returns (PushSegmentResponse) {}
+}
+
+message SegmentMetadata {
+  string stream_id = 1;
+  int64 sequence_number = 2;
+  double duration_seconds = 3;
+}
+
+message PushSegmentRequest {
+  oneof payload {
+    SegmentMetadata metadata = 1;
+    bytes chunk = 2;
+  }
+}
+
+message PushSegmentResponse {
+  int64 bytes_received = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}

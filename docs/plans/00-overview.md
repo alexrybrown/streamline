@@ -6,7 +6,7 @@
 
 **Goal:** Build a live streaming orchestration platform that ingests, transcodes, packages, and serves video — demonstrating domain expertise in live video infrastructure with Go, ConnectRPC, Kafka, and Kubernetes.
 
-**Architecture:** Control plane (Stream Manager, Pipeline Controller, API Service) orchestrates a data plane (Source, Encoder Workers, Packager). Kafka carries pipeline telemetry. Encoder workers push segments to Packager via HTTP. The system uses layered failover: local FFmpeg supervisor, heartbeat timeout, and K8s restart.
+**Architecture:** Control plane (Stream Manager, Pipeline Controller, API Service) orchestrates a data plane (Source, Encoder Workers, Packager). Kafka carries pipeline telemetry. All inter-service communication uses ConnectRPC; encoder workers push segments to Packager via a `PushSegment` RPC. The system uses layered failover: local FFmpeg supervisor, heartbeat timeout, and K8s restart.
 
 **Tech Stack:** Go, ConnectRPC + Protobuf (Buf CLI), Kafka (twmb/franz-go), MongoDB (official driver), FFmpeg + H.264, HLS (RFC 8216), Vite + React + hls.js, OpenTelemetry, Prometheus, Grafana, Docker Compose, Helm, OpenTofu
 
@@ -62,6 +62,12 @@ Single `protoc-gen-es` plugin, `target=ts`. Plain TypeScript types (not classes)
 
 ### Docker Compose Ports
 MongoDB is mapped to **host port 27018** (not default 27017) to avoid conflicts with other local MongoDB instances. All services connecting to MongoDB on `localhost` must use port 27018. Kafka is on 9092, Prometheus on 9090, Grafana on 3001.
+
+### Inter-Service Communication: ConnectRPC Everywhere
+All service-to-service communication uses ConnectRPC with protobuf, including data plane operations like segment transfer (encoder → packager). Segment transfer uses a **client-streaming RPC** with 64KiB chunked messages (`oneof { SegmentMetadata metadata; bytes chunk; }`) so the server writes each chunk to disk as it arrives — peak memory per concurrent upload is ~64KB, comparable to plain HTTP `io.Copy` streaming (~32KB). Alternatives considered: (1) plain HTTP PUT — simpler but inconsistent protocol, no codegen; (2) unary RPC with `bytes` field — buffers entire 2-6MB segment in memory, unacceptable at scale with concurrent streams and ABR renditions. The client-streaming approach preserves ConnectRPC's benefits (type-safe codegen, unified protocol, consistent error handling) with no meaningful memory or performance penalty.
+
+### Kafka Event Serialization: Protobuf (not JSON)
+Kafka events use proto-defined messages (`SegmentProduced`, `Heartbeat`, etc. from `events.proto`) marshalled with `proto.Marshal`. The encoder worker's original JSON serialization was replaced in Epic 3 to align with the protobuf-everywhere approach. This ensures type safety, backward-compatible schema evolution, and consistency with ConnectRPC.
 
 ### GitHub Username
 `alexrybrown` — already set in `go.mod` as `github.com/alexrybrown/streamline`.

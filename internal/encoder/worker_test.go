@@ -2,7 +2,6 @@ package encoder_test
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,7 +11,9 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/goleak"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 
+	streamlinev1 "github.com/alexrybrown/streamline/gen/go/streamline/v1"
 	"github.com/alexrybrown/streamline/internal/encoder"
 	streamkafka "github.com/alexrybrown/streamline/internal/kafka"
 )
@@ -205,18 +206,21 @@ func TestWorker_PublishesHeartbeats(t *testing.T) {
 		if string(record.Key) != "hb-stream" {
 			t.Errorf("expected key hb-stream, got %s", string(record.Key))
 		}
-		var heartbeat map[string]interface{}
-		if err := json.Unmarshal(record.Value, &heartbeat); err != nil {
-			t.Fatalf("invalid heartbeat JSON: %v", err)
+		var heartbeat streamlinev1.Heartbeat
+		if err := proto.Unmarshal(record.Value, &heartbeat); err != nil {
+			t.Fatalf("invalid heartbeat protobuf: %v", err)
 		}
-		if heartbeat["worker_id"] != "hb-worker" {
-			t.Errorf("expected worker_id hb-worker, got %v", heartbeat["worker_id"])
+		if heartbeat.GetWorkerId() != "hb-worker" {
+			t.Errorf("expected worker_id hb-worker, got %v", heartbeat.GetWorkerId())
 		}
-		if heartbeat["stream_id"] != "hb-stream" {
-			t.Errorf("expected stream_id hb-stream, got %v", heartbeat["stream_id"])
+		if heartbeat.GetStreamId() != "hb-stream" {
+			t.Errorf("expected stream_id hb-stream, got %v", heartbeat.GetStreamId())
 		}
-		if heartbeat["status"] != "encoding" {
-			t.Errorf("expected status encoding, got %v", heartbeat["status"])
+		if heartbeat.GetStatus() != streamlinev1.WorkerStatus_WORKER_STATUS_ENCODING {
+			t.Errorf("expected status ENCODING, got %v", heartbeat.GetStatus())
+		}
+		if heartbeat.GetTimestamp() == nil {
+			t.Error("expected timestamp to be set")
 		}
 		found = true
 	})
@@ -298,19 +302,21 @@ func TestWorker_PublishesSegmentEvents(t *testing.T) {
 		if string(record.Key) != "seg-stream" {
 			t.Errorf("expected key seg-stream, got %s", string(record.Key))
 		}
-		var event map[string]interface{}
-		if err := json.Unmarshal(record.Value, &event); err != nil {
-			t.Fatalf("invalid segment event JSON: %v", err)
+		var event streamlinev1.SegmentProduced
+		if err := proto.Unmarshal(record.Value, &event); err != nil {
+			t.Fatalf("invalid segment event protobuf: %v", err)
 		}
-		if event["worker_id"] != "seg-worker" {
-			t.Errorf("expected worker_id seg-worker, got %v", event["worker_id"])
+		if event.GetWorkerId() != "seg-worker" {
+			t.Errorf("expected worker_id seg-worker, got %v", event.GetWorkerId())
 		}
-		if event["stream_id"] != "seg-stream" {
-			t.Errorf("expected stream_id seg-stream, got %v", event["stream_id"])
+		if event.GetStreamId() != "seg-stream" {
+			t.Errorf("expected stream_id seg-stream, got %v", event.GetStreamId())
 		}
-		// sequence_number comes as float64 from JSON
-		if seq, ok := event["sequence_number"].(float64); !ok || int64(seq) != 1 {
-			t.Errorf("expected sequence_number 1, got %v", event["sequence_number"])
+		if event.GetSequenceNumber() != 1 {
+			t.Errorf("expected sequence_number 1, got %v", event.GetSequenceNumber())
+		}
+		if event.GetTimestamp() == nil {
+			t.Error("expected timestamp to be set")
 		}
 		found = true
 	})

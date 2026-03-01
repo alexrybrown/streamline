@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -432,6 +434,88 @@ func TestNewService_NilLogDefaultsToNop(t *testing.T) {
 	calls := spy.publishCalls()
 	if len(calls) != 1 {
 		t.Fatalf("expected 1 publish call, got %d", len(calls))
+	}
+}
+
+func TestService_Run_GracefulShutdown(t *testing.T) {
+	outputDir := t.TempDir()
+	spy := &spyPublisher{}
+
+	service := packager.NewService(packager.ServiceConfig{
+		OutputDir:      outputDir,
+		TargetDuration: 6,
+		WindowSize:     5,
+		Log:            zap.NewNop(),
+		Publisher:      spy,
+	})
+	t.Cleanup(service.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Run in a goroutine since it blocks until context cancellation.
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- service.Run(ctx, "127.0.0.1:0")
+	}()
+
+	// Give the server a moment to start, then cancel.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Errorf("expected nil error from graceful shutdown, got: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return within 5 seconds after context cancellation")
+	}
+}
+
+func TestService_Run_ServerErrorReturned(t *testing.T) {
+	outputDir := t.TempDir()
+	spy := &spyPublisher{}
+
+	service := packager.NewService(packager.ServiceConfig{
+		OutputDir:      outputDir,
+		TargetDuration: 6,
+		WindowSize:     5,
+		Log:            zap.NewNop(),
+		Publisher:      spy,
+	})
+	t.Cleanup(service.Close)
+
+	// Bind a listener to grab a port, then try to Run on the same port.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("bind listener: %v", err)
+	}
+	address := listener.Addr().String()
+	defer func() { _ = listener.Close() }()
+
+	// Run blocks on <-ctx.Done() even when the server fails to bind,
+	// so cancel the context shortly after to unblock it.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- service.Run(ctx, address)
+	}()
+
+	// Give the server goroutine time to fail, then cancel the context.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errChan:
+		if err == nil {
+			t.Fatal("expected error for address already in use, got nil")
+		}
+		if !strings.Contains(err.Error(), "HTTP server error") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return within 5 seconds")
 	}
 }
 

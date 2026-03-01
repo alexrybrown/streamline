@@ -23,7 +23,8 @@
 | 5 | `05-pipeline-controller.md` | TODO | Kill encoder → controller recovers |
 | 6 | `06-api-dashboard.md` | TODO | Full end-to-end in dashboard |
 | 7 | `07-observability-infra.md` | TODO | Metrics, tracing, Helm, OpenTofu |
-| 8 | `08-abr-polish.md` | TODO | Multi-rendition, CI, docs |
+| 8 | `08-low-latency.md` | TODO | LL-HLS or shorter segments, smooth live playback |
+| 9 | `09-abr-polish.md` | TODO | Multi-rendition, CI, docs |
 
 **Epics are sequential** — each builds on the previous.
 
@@ -35,7 +36,8 @@ Epic 1 (Foundation)  ✓
                  └─▶ Epic 5 (Pipeline Controller)
                       └─▶ Epic 6 (API + Dashboard)
                            └─▶ Epic 7 (Observability & Infra)
-                                └─▶ Epic 8 (ABR + Polish)
+                                └─▶ Epic 8 (Low-Latency Delivery)
+                                     └─▶ Epic 9 (ABR + Polish)
 ```
 
 ---
@@ -60,6 +62,9 @@ Use `pass-cli run --env-file .env.template -- <cmd>` when real secrets are neede
 ### Frontend Codegen: Connect-ES v2
 Single `protoc-gen-es` plugin, `target=ts`. Plain TypeScript types (not classes). `create(Schema, {...})` pattern.
 
+### Frontend Dev Server: Vite
+The full dashboard (Epic 6) uses Vite + React + hls.js. The bare `web/verify.html` page from Epic 3 is a standalone file for quick HLS verification and does not use Vite.
+
 ### Docker Compose Ports
 MongoDB is mapped to **host port 27018** (not default 27017) to avoid conflicts with other local MongoDB instances. All services connecting to MongoDB on `localhost` must use port 27018. Kafka is on 9092, Prometheus on 9090, Grafana on 3001.
 
@@ -83,3 +88,4 @@ Kafka events use proto-defined messages (`SegmentProduced`, `Heartbeat`, etc. fr
 5. **Code in plan is a starting point, not gospel** — adapt per CLAUDE.md conventions
 6. **Existing code is the source of truth** — prior epics may have adapted plan code during implementation. Do not assume plan code snippets match the actual codebase. Always read and understand the current code before integrating, and adapt new plan code to match existing patterns and APIs.
 7. **Commit after every story** — intermediate commits within stories are fine too
+8. **Packager stream lifecycle gap** — the packager has no stream lifecycle management: no state reset on stream stop, no segment cleanup, no handling of encoder reconnections with fresh sequence numbers. The in-memory segment dedup map and manifest generator accumulate state across encoder restarts, causing non-consecutive sequence numbers in HLS playlists. Must be addressed in Epic 4 (Stream Manager) when StopStream/StartStream are implemented.

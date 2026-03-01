@@ -52,12 +52,18 @@ func main() {
 		log.Fatal("failed to create kafka producer", zap.Error(err))
 	}
 
+	var allowedOrigins []string
+	if origins := os.Getenv("ALLOWED_ORIGINS"); origins != "" {
+		allowedOrigins = strings.Split(origins, ",")
+	}
+
 	service := packager.NewService(packager.ServiceConfig{
 		OutputDir:      outputDir,
 		TargetDuration: targetDuration,
 		WindowSize:     windowSize,
 		Log:            log,
 		Publisher:      producer,
+		AllowedOrigins: allowedOrigins,
 	})
 	defer service.Close()
 

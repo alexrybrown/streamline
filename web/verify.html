@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>streamline — HLS Verification</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    body { font-family: monospace; background: #1a1a1a; color: #eee; padding: 20px; }
+    video { max-width: 800px; width: 100%; background: #000; }
+    #status { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>streamline — HLS Verification</h1>
+  <video id="video" controls></video>
+  <div id="status">Connecting...</div>
+
+  <script>
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+    const src = 'http://localhost:8082/hls/stream-1/stream.m3u8';
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        // Play from 4 segments behind the live edge (~24s at 6s segments).
+        // Extra headroom over the default (3) absorbs encoding jitter from
+        // the real-time (-re) FFmpeg source.
+        liveSyncDurationCount: 4,
+        // Auto-seek forward when falling more than 8 segments behind the
+        // live edge, preventing indefinite stalls.
+        liveMaxLatencyDurationCount: 8,
+        // Buffer up to 60 seconds ahead of the current position to smooth
+        // over transient segment delivery delays.
+        maxBufferLength: 60,
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        status.textContent = 'Buffering...';
+      });
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        if (video.paused) {
+          status.textContent = 'Playing';
+          video.play();
+        }
+      });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          status.textContent = 'Fatal error: ' + data.details;
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          } else {
+            hls.destroy();
+          }
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = src;
+    }
+  </script>
+</body>
+</html>

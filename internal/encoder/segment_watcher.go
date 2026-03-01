@@ -18,9 +18,10 @@ import (
 const sendTimeout = 200 * time.Millisecond
 
 // defaultPollInterval is the fallback polling frequency for segment detection
-// when none is configured. 500ms is frequent enough for near-realtime detection
-// without excessive CPU usage.
-const defaultPollInterval = 500 * time.Millisecond
+// when none is configured. 200ms keeps detection latency well under 5% of a
+// typical 6-second HLS segment while adding negligible CPU overhead (one
+// filepath.Glob per tick).
+const defaultPollInterval = 200 * time.Millisecond
 
 // Segment represents a detected HLS segment file.
 type Segment struct {

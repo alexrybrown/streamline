@@ -95,6 +95,12 @@ func NewWorker(cfg WorkerConfig) (*Worker, error) {
 		zap.String("stream_id", cfg.StreamID),
 	)
 
+	// Propagate the worker's scoped logger to FFmpeg so its stderr
+	// output is attributed to this worker/stream in structured logs.
+	if cfg.FFmpeg.Log == nil {
+		cfg.FFmpeg.Log = log
+	}
+
 	heartbeatPublisher, err := streamkafka.NewProducer(streamkafka.ProducerConfig{
 		Brokers: cfg.KafkaBrokers,
 		Topic:   streamkafka.TopicHeartbeats,

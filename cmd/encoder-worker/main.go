@@ -21,11 +21,14 @@ func main() {
 	workerID := envOrDefault("WORKER_ID", "worker-1")
 	streamID := envOrDefault("STREAM_ID", "stream-1")
 	inputURI := envOrDefault("INPUT_URI", "file:///app/assets/bbb.mp4")
+	// Empty means segment pushing to packager is disabled.
+	packagerURL := os.Getenv("PACKAGER_URL")
 
 	worker, err := encoder.NewWorker(encoder.WorkerConfig{
 		WorkerID:     workerID,
 		StreamID:     streamID,
 		KafkaBrokers: strings.Split(cfg.KafkaBrokers, ","),
+		PackagerURL:  packagerURL,
 		Log:          log,
 		FFmpeg: encoder.FFmpegConfig{
 			InputArgs:        []string{"-re", "-i", inputURI},

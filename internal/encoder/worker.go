@@ -35,6 +35,11 @@ const (
 	// 5 s is well above normal latency but short enough to avoid stalling the
 	// heartbeat/segment pipelines if the broker is unreachable.
 	kafkaPublishTimeout = 5 * time.Second
+
+	// segmentPushTimeout caps how long the ConnectRPC client-streaming push
+	// to the packager can take. Longer than kafkaPublishTimeout because segment
+	// pushes stream potentially hundreds of KiB of file data over the network.
+	segmentPushTimeout = 30 * time.Second
 )
 
 // WorkerConfig holds configuration for an encoder worker.
@@ -43,6 +48,7 @@ type WorkerConfig struct {
 	StreamID          string
 	KafkaBrokers      []string
 	FFmpeg            FFmpegConfig
+	PackagerURL       string
 	HeartbeatInterval time.Duration
 	BackoffBase       time.Duration
 	Log               *zap.Logger
@@ -52,12 +58,14 @@ type WorkerConfig struct {
 }
 
 // Worker manages encoding for a single stream. It coordinates the FFmpeg
-// process, segment watcher, heartbeat emitter, and Kafka publishers.
+// process, segment watcher, heartbeat emitter, Kafka publishers, and
+// optional segment pushing to the packager.
 type Worker struct {
 	cfg                WorkerConfig
 	log                *zap.Logger
 	heartbeatPublisher publisher
 	segmentPublisher   publisher
+	segmentPusher      segmentPusher
 	processFactory     FFmpegFactory
 }
 
@@ -113,11 +121,28 @@ func NewWorker(cfg WorkerConfig) (*Worker, error) {
 		factory = defaultFFmpegFactory
 	}
 
+	var pusher segmentPusher
+	if cfg.PackagerURL != "" {
+		pusher, err = NewConnectSegmentPusher(SegmentPusherConfig{
+			PackagerURL: cfg.PackagerURL,
+			Log:         log,
+		})
+		if err != nil {
+			heartbeatPublisher.Close()
+			segmentPublisher.Close()
+			return nil, err
+		}
+		log.Info("segment pushing enabled", zap.String("packager_url", cfg.PackagerURL))
+	} else {
+		log.Info("segment pushing disabled — no PackagerURL configured")
+	}
+
 	return &Worker{
 		cfg:                cfg,
 		log:                log,
 		heartbeatPublisher: heartbeatPublisher,
 		segmentPublisher:   segmentPublisher,
+		segmentPusher:      pusher,
 		processFactory:     factory,
 	}, nil
 }
@@ -260,6 +285,25 @@ func (w *Worker) publishHeartbeat(ctx context.Context) {
 }
 
 func (w *Worker) publishSegment(ctx context.Context, segment Segment) {
+	log := w.log.With(
+		zap.String("method", "publishSegment"),
+		zap.Int64("sequence", segment.SequenceNumber),
+		zap.Int64("size", segment.Size),
+	)
+
+	// Push segment data to the packager before publishing the Kafka event,
+	// so the packager has the data available when consumers see the event.
+	if w.segmentPusher != nil {
+		pushCtx, pushCancel := context.WithTimeout(ctx, segmentPushTimeout)
+		defer pushCancel()
+
+		durationSeconds := float64(w.cfg.FFmpeg.SegmentDurationS)
+		if err := w.segmentPusher.PushSegment(pushCtx, w.cfg.StreamID, segment, durationSeconds); err != nil {
+			log.Error("failed to push segment to packager", zap.Error(err))
+			return
+		}
+	}
+
 	event := &streamlinev1.SegmentProduced{
 		StreamId:       w.cfg.StreamID,
 		WorkerId:       w.cfg.WorkerID,
@@ -269,24 +313,14 @@ func (w *Worker) publishSegment(ctx context.Context, segment Segment) {
 	}
 	data, err := proto.Marshal(event)
 	if err != nil {
-		w.log.Error("failed to marshal segment event",
-			zap.String("method", "publishSegment"),
-			zap.Error(err),
-		)
+		log.Error("failed to marshal segment event", zap.Error(err))
 		return
 	}
 	publishCtx, publishCancel := context.WithTimeout(ctx, kafkaPublishTimeout)
 	defer publishCancel()
 	if err := w.segmentPublisher.Publish(publishCtx, w.cfg.StreamID, data); err != nil {
-		w.log.Warn("failed to publish segment event",
-			zap.String("method", "publishSegment"),
-			zap.Error(err),
-		)
+		log.Warn("failed to publish segment event", zap.Error(err))
 		return
 	}
-	w.log.Info("segment produced",
-		zap.String("method", "publishSegment"),
-		zap.Int64("sequence", segment.SequenceNumber),
-		zap.Int64("size", segment.Size),
-	)
+	log.Info("segment produced")
 }

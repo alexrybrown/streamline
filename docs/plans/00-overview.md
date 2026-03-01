@@ -18,7 +18,7 @@
 |------|------|--------|-----------|
 | 1 | `01-foundation.md` | DONE | `buf generate` works, `docker compose up` starts infra |
 | 2 | `02-encoding-pipeline.md` | DONE | Segments on disk, events in Kafka |
-| 3 | `03-packaging-playback.md` | IN PROGRESS (3.1-3.3 done) | BBB plays in hls.js page |
+| 3 | `03-packaging-playback.md` | DONE | BBB plays in hls.js page |
 | 4 | `04-stream-manager.md` | TODO | ConnectRPC call starts stream end-to-end |
 | 5 | `05-pipeline-controller.md` | TODO | Kill encoder → controller recovers |
 | 6 | `06-api-dashboard.md` | TODO | Full end-to-end in dashboard |
@@ -31,8 +31,8 @@
 ```
 Epic 1 (Foundation)  ✓
   └─▶ Epic 2 (Encoding Pipeline)  ✓
-       └─▶ Epic 3 (Packaging + Playback)  ← IN PROGRESS (Stories 3.1–3.3 done, 3.4–3.5 remain)
-            └─▶ Epic 4 (Stream Manager + Live Source)
+       └─▶ Epic 3 (Packaging + Playback)  ✓
+            └─▶ Epic 4 (Stream Manager + Live Source)  ← NEXT
                  └─▶ Epic 5 (Pipeline Controller)
                       └─▶ Epic 6 (API + Dashboard)
                            └─▶ Epic 7 (Observability & Infra)

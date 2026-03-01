@@ -28,3 +28,6 @@
 - No magic numbers. Use named constants or config fields. Comment why the value was chosen.
 - No magic strings for branching logic. Use typed constants, config fields, or caller-provided values.
 - Prefer table-driven tests.
+
+## Worktrees
+- Directory: `.worktrees/`

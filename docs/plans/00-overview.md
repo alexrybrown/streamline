@@ -75,4 +75,5 @@ MongoDB is mapped to **host port 27018** (not default 27017) to avoid conflicts 
 3. **Docker must be running** for Docker Compose and testcontainers
 4. **TDD everywhere** — write failing test → implement → verify pass → commit
 5. **Code in plan is a starting point, not gospel** — adapt per CLAUDE.md conventions
-6. **Commit after every story** — intermediate commits within stories are fine too
+6. **Existing code is the source of truth** — prior epics may have adapted plan code during implementation. Do not assume plan code snippets match the actual codebase. Always read and understand the current code before integrating, and adapt new plan code to match existing patterns and APIs.
+7. **Commit after every story** — intermediate commits within stories are fine too

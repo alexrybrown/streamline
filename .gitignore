@@ -2,6 +2,7 @@
 /bin/
 /encoder-worker
 /packager
+/stream-manager
 *.exe
 
 # Test artifacts

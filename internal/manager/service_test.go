@@ -2,6 +2,7 @@ package manager_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -257,4 +258,98 @@ func TestService_RestartStream(t *testing.T) {
 			assert.Equal(t, streamlinev1.StreamState_STREAM_STATE_PROVISIONING, response.Msg.GetStream().GetState())
 		})
 	}
+}
+
+// errorStore is a test double that returns errors for specified methods,
+// exercising the internal error paths in the service layer.
+type errorStore struct {
+	fakeStore
+	findBySourceURIErr error
+	createErr          error
+	updateStateErr     error
+	getErr             error
+}
+
+func (store *errorStore) FindBySourceURI(ctx context.Context, sourceURI string) (*streamlinev1.Stream, error) {
+	if store.findBySourceURIErr != nil {
+		return nil, store.findBySourceURIErr
+	}
+	return store.fakeStore.FindBySourceURI(ctx, sourceURI)
+}
+
+func (store *errorStore) Create(ctx context.Context, stream *streamlinev1.Stream) (*streamlinev1.Stream, error) {
+	if store.createErr != nil {
+		return nil, store.createErr
+	}
+	return store.fakeStore.Create(ctx, stream)
+}
+
+func (store *errorStore) UpdateState(ctx context.Context, streamID string, state streamlinev1.StreamState) error {
+	if store.updateStateErr != nil {
+		return store.updateStateErr
+	}
+	return store.fakeStore.UpdateState(ctx, streamID, state)
+}
+
+func (store *errorStore) Get(ctx context.Context, streamID string) (*streamlinev1.Stream, error) {
+	if store.getErr != nil {
+		return nil, store.getErr
+	}
+	return store.fakeStore.Get(ctx, streamID)
+}
+
+func TestService_StartStream_StoreErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		store      *errorStore
+		expectCode connect.Code
+	}{
+		{
+			name: "FindBySourceURI error returns internal",
+			store: &errorStore{
+				fakeStore:          *newFakeStore(),
+				findBySourceURIErr: errors.New("db connection lost"),
+			},
+			expectCode: connect.CodeInternal,
+		},
+		{
+			name: "Create error returns internal",
+			store: &errorStore{
+				fakeStore: *newFakeStore(),
+				createErr: errors.New("insert failed"),
+			},
+			expectCode: connect.CodeInternal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := manager.NewService(manager.ServiceConfig{Store: tt.store})
+			_, err := service.StartStream(context.Background(), connect.NewRequest(&streamlinev1.StartStreamRequest{
+				SourceUri: "rtmp://localhost/live/error-test",
+			}))
+			require.Error(t, err)
+			assert.Equal(t, tt.expectCode, connect.CodeOf(err))
+		})
+	}
+}
+
+func TestService_StopStream_InternalError(t *testing.T) {
+	store := &errorStore{
+		fakeStore:      *newFakeStore(),
+		updateStateErr: errors.New("db timeout"),
+	}
+	service := manager.NewService(manager.ServiceConfig{Store: store})
+
+	_, err := service.StopStream(context.Background(), connect.NewRequest(&streamlinev1.StopStreamRequest{
+		StreamId: "some-id",
+	}))
+	require.Error(t, err)
+	assert.Equal(t, connect.CodeInternal, connect.CodeOf(err))
+}
+
+func TestNewService_PanicsOnNilStore(t *testing.T) {
+	assert.Panics(t, func() {
+		manager.NewService(manager.ServiceConfig{})
+	})
 }

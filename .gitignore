@@ -13,10 +13,6 @@ coverage.out
 .vscode/
 *.swp
 
-# Generated
-/gen/
-web/dashboard/src/gen/
-
 # Dependencies
 /vendor/
 

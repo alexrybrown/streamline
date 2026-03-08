@@ -80,7 +80,7 @@ Use `pass-cli run --env-file .env.template -- <cmd>` when real secrets are neede
 The bare `web/verify.html` page from Epic 3 is the only frontend. It uses hls.js for HLS verification, quality level display, and ABR testing.
 
 ### Docker Compose Ports
-MongoDB is mapped to **host port 27018** (not default 27017) to avoid conflicts with other local MongoDB instances. All services connecting to MongoDB on `localhost` must use port 27018. Kafka is on 9092, Prometheus on 9090, Grafana on 3001, MinIO API on 9000, MinIO Console on 9001, nginx on 8080.
+MongoDB is mapped to **host port 27018** (not default 27017) to avoid conflicts with other local MongoDB instances. All services connecting to MongoDB on `localhost` must use port 27018. Kafka is on 9092, Prometheus on 9090, MinIO API on 9000, MinIO Console on 9001, nginx on 8080.
 
 ### Inter-Service Communication: ConnectRPC Everywhere
 All service-to-service communication uses ConnectRPC with protobuf, including data plane operations like segment transfer (encoder -> packager). Segment transfer uses a **client-streaming RPC** with 64KiB chunked messages (`oneof { SegmentMetadata metadata; bytes chunk; }`) so the server writes each chunk as it arrives — peak memory per concurrent upload is ~64KB.
@@ -125,7 +125,7 @@ Written in Epic 9 after the full pipeline is running. Covers what this project d
 ## Notes for Implementer
 
 1. **FFmpeg must be installed** — `sudo apt install ffmpeg` or `brew install ffmpeg`
-2. **Go 1.22+** recommended
+2. **Go 1.25+** recommended
 3. **Docker must be running** for Docker Compose and testcontainers
 4. **TDD everywhere** — write failing test -> implement -> verify pass -> commit
 5. **Code in plan is a starting point, not gospel** — adapt per CLAUDE.md conventions

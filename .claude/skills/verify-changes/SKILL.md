@@ -12,7 +12,7 @@ Run all verification steps from the worktree root. Every step must pass before c
 Run in this order. Stop on first failure.
 
 ```
-1. goimports -local github.com/alexrybrown/streamline -w .   # fix formatting and import grouping
+1. goimports -local github.com/alexrybrown/streamline -w cmd/ internal/   # fix formatting (skip gen/ — generated files keep protoc formatting)
 2. go build ./cmd/...
 3. go test ./... -race -count=1 -timeout=60s -coverprofile=coverage.out
 4. go tool cover -func=coverage.out   # verify ≥90% total coverage

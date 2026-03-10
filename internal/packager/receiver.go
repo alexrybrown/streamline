@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,6 +66,25 @@ func NewReceiver(cfg ReceiverConfig) *Receiver {
 		onSegmentWritten: cfg.OnSegmentWritten,
 		dedup:            make(map[string]struct{}),
 	}
+}
+
+// ResetStream clears all dedup entries for the given stream, allowing
+// segments with previously-seen sequence numbers to be accepted again.
+// This is called when a stream is stopped and restarted.
+func (receiver *Receiver) ResetStream(streamID string) {
+	receiver.dedupMu.Lock()
+	prefix := streamID + "/"
+	for key := range receiver.dedup {
+		if strings.HasPrefix(key, prefix) {
+			delete(receiver.dedup, key)
+		}
+	}
+	receiver.dedupMu.Unlock()
+
+	receiver.log.Info("stream dedup state reset",
+		zap.String("method", "ResetStream"),
+		zap.String("streamID", streamID),
+	)
 }
 
 // PushSegment receives a client-streaming RPC containing segment metadata

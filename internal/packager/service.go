@@ -119,6 +119,18 @@ func (service *Service) PushSegment(ctx context.Context, stream *connect.ClientS
 	return service.receiver.PushSegment(ctx, stream)
 }
 
+// ResetStream clears all stream-specific state (dedup entries and manifest
+// segment window) so the stream can be restarted with fresh sequence numbers.
+func (service *Service) ResetStream(streamID string) {
+	service.receiver.ResetStream(streamID)
+	service.manifest.ResetStream(streamID)
+
+	service.log.Info("stream state reset",
+		zap.String("method", "ResetStream"),
+		zap.String("streamID", streamID),
+	)
+}
+
 // onSegmentWritten is the callback invoked after the receiver writes a segment.
 // It updates the HLS manifest and publishes a SegmentAvailable event to Kafka.
 func (service *Service) onSegmentWritten(streamID string, segment SegmentInfo) {

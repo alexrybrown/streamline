@@ -54,6 +54,7 @@ func (spy *spyPublisher) publishCalls() []publishCall {
 // testServiceEnv holds the components created for a service integration test.
 type testServiceEnv struct {
 	Client    streamlinev1connect.PackagerServiceClient
+	Service   *packager.Service
 	Spy       *spyPublisher
 	OutputDir string
 	ServerURL string
@@ -82,6 +83,7 @@ func newTestServiceEnv(t *testing.T) testServiceEnv {
 	client := streamlinev1connect.NewPackagerServiceClient(server.Client(), server.URL)
 	return testServiceEnv{
 		Client:    client,
+		Service:   service,
 		Spy:       spy,
 		OutputDir: outputDir,
 		ServerURL: server.URL,

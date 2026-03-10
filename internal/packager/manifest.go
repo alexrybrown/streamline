@@ -105,6 +105,20 @@ func (generator *ManifestGenerator) AddSegment(streamID string, segment SegmentI
 	return generator.writePlaylist(streamID)
 }
 
+// ResetStream clears the segment window for the given stream, so the next
+// AddSegment call starts a fresh playlist. This is called when a stream is
+// stopped and restarted.
+func (generator *ManifestGenerator) ResetStream(streamID string) {
+	generator.mu.Lock()
+	delete(generator.segments, streamID)
+	generator.mu.Unlock()
+
+	generator.log.Info("stream manifest state reset",
+		zap.String("method", "ResetStream"),
+		zap.String("streamID", streamID),
+	)
+}
+
 // writePlaylist writes the M3U8 playlist for the given stream using atomic rename.
 // Caller must hold generator.mu.
 func (generator *ManifestGenerator) writePlaylist(streamID string) error {

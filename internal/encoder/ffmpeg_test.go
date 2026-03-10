@@ -119,6 +119,9 @@ func TestFFmpegProcess_ProducesSegments(t *testing.T) {
 			matches, _ := filepath.Glob(filepath.Join(outputDir, "*.ts"))
 			if len(matches) > 0 {
 				cancel()
+				// Wait for FFmpeg to fully exit before t.TempDir() cleanup
+				// removes the output directory.
+				<-errCh
 				return
 			}
 			time.Sleep(500 * time.Millisecond)

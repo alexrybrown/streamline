@@ -36,7 +36,7 @@
 | 1 | `01-foundation.md` | DONE | `buf generate` works, `docker compose up` starts infra |
 | 2 | `02-encoding-pipeline.md` | DONE | Segments on disk, events in Kafka |
 | 3 | `03-packaging-playback.md` | DONE | BBB plays in hls.js page |
-| 4 | `04-stream-manager.md` | IN PROGRESS (4.1 done) | ConnectRPC call starts stream end-to-end |
+| 4 | `04-stream-manager.md` | IN PROGRESS (4.1, 4.2 done) | ConnectRPC call starts stream end-to-end |
 | 5 | `05-cmaf-object-storage.md` | TODO | CMAF/fMP4 segments in MinIO + 2 ADRs |
 | 6 | `06-abr-multi-rendition.md` | TODO | 4-tier ABR with master playlist, adaptive switching in hls.js |
 | 7 | `07-pipeline-controller.md` | TODO | Kill encoder, controller recovers with segment continuity + 2 ADRs |
@@ -49,7 +49,7 @@
 Epic 1 (Foundation)  done
   Epic 2 (Encoding Pipeline)  done
     Epic 3 (Packaging + Playback)  done
-      Epic 4 (Stream Manager + Live Source + API)  <-- IN PROGRESS (4.1 done, 4.2 next)
+      Epic 4 (Stream Manager + Live Source + API)  <-- IN PROGRESS (4.1-4.2 done, 4.3 next)
         Epic 5 (CMAF + Object Storage + 2 ADRs)
           Epic 6 (Multi-Rendition ABR)
             Epic 7 (Pipeline Controller + Failover + 2 ADRs)
